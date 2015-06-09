@@ -203,9 +203,12 @@ private:
     int32_t jpeg_quality, png_level, queueSize, reg_dev, depth_dev, worker_threads;
     std::string depth_method, reg_method, calib_path, sensor, base_name;
 
-    std::string depthDefault = "cpu";
+    std::string depthDefault = "cuda";
     std::string regDefault = "default";
 
+#ifdef LIBFREENECT2_WITH_CUDA_SUPPORT
+    depthDefault = "cuda";
+#endif
 #ifdef LIBFREENECT2_WITH_OPENGL_SUPPORT
     depthDefault = "opengl";
 #endif
@@ -337,7 +340,9 @@ private:
   {
     if(method == "default")
     {
-#ifdef LIBFREENECT2_WITH_OPENCL_SUPPORT
+#ifdef LIBFREENECT2_WITH_CUDA_SUPPORT
+      packetPipeline = new libfreenect2::CudaPacketPipeline(device);      
+#elif defined(LIBFREENECT2_WITH_OPENCL_SUPPORT)
       packetPipeline = new libfreenect2::OpenCLPacketPipeline(device);
 #elif defined(LIBFREENECT2_WITH_OPENGL_SUPPORT)
       packetPipeline = new libfreenect2::OpenGLPacketPipeline();
@@ -848,7 +853,7 @@ private:
     std::vector<cv::Mat> images(COUNT);
     std::vector<Status> status = this->status;
     size_t frame;
-
+    // std::cout << "receiveIrDepth" << std::endl;
     if(!receiveFrames(listenerIrDepth, frames))
     {
       lockIrDepth.unlock();
@@ -885,7 +890,7 @@ private:
     std::vector<cv::Mat> images(COUNT);
     std::vector<Status> status = this->status;
     size_t frame;
-
+    // std::cout << "receiveColor" << std::endl;
     if(!receiveFrames(listenerColor, frames))
     {
       lockColor.unlock();
@@ -1008,12 +1013,16 @@ private:
     {
       lockRegLowRes.lock();
       depthRegLowRes->registerDepth(depthShifted, images[DEPTH_QHD]);
+      // depthShifted.copyTo(images[DEPTH_QHD]);
+      std::cout << " Register Depth Low Res called!" << std::endl;
       lockRegLowRes.unlock();
     }
     if(status[DEPTH_HD])
     {
       lockRegHighRes.lock();
       depthRegHighRes->registerDepth(depthShifted, images[DEPTH_HD]);
+      // depthShifted.copyTo(images[DEPTH_HD]);
+      std::cout << " Register Depth High Res called!" << std::endl;
       lockRegHighRes.unlock();
     }
   }

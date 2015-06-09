@@ -29,8 +29,10 @@ public:
   enum Method
   {
     DEFAULT = 0,
+    CUDA,
     CPU,
     OPENCL
+
   };
 
 protected:
