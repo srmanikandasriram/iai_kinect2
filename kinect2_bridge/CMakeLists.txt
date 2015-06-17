@@ -87,6 +87,14 @@ target_link_libraries(kinect2_bridge_nodelet
   ${kinect2_registration_LIBRARY}
 )
 
+add_executable(depth_rect src/depth_rect.cpp)
+target_link_libraries(depth_rect
+  ${catkin_LIBRARIES}
+  ${OpenCV_LIBRARIES}
+  ${freenect2_LIBRARY}
+  ${kinect2_registration_LIBRARY}
+)
+
 add_executable(kinect2_bridge src/kinect2_bridge.cpp)
 target_link_libraries(kinect2_bridge
   ${catkin_LIBRARIES}
@@ -110,7 +118,7 @@ target_link_libraries(kinect2_bridge
 # )
 
 ## Mark executables and/or libraries for installation
-install(TARGETS kinect2_bridge kinect2_bridge_nodelet
+install(TARGETS kinect2_bridge kinect2_bridge_nodelet depth_rect
 #   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
