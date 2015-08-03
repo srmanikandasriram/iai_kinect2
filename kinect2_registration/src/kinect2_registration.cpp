@@ -17,9 +17,9 @@
 
 #include <kinect2_registration/kinect2_registration.h>
 
-#ifdef DEPTH_REG_CUDA
-#include "depth_registration_cuda.h"
-#endif
+// #ifdef DEPTH_REG_CUDA
+// #include "depth_registration_cuda.h"
+// #endif
 
 #ifdef DEPTH_REG_CPU
 #include "depth_registration_cpu.h"
@@ -61,9 +61,9 @@ DepthRegistration *DepthRegistration::New(Method method)
 {
   if(method == DEFAULT)
   {
-#ifdef DEPTH_REG_CUDA
-    method = CUDA;
-#elif defined DEPTH_REG_OPENCL
+// #ifdef DEPTH_REG_CUDA
+//     method = CUDA;
+#ifdef DEPTH_REG_OPENCL
     method = OPENCL;
 #elif defined DEPTH_REG_CPU
     method = CPU;
@@ -75,14 +75,14 @@ DepthRegistration *DepthRegistration::New(Method method)
   case DEFAULT:
     std::cerr << OUT_NAME("New") "No default registration method available!" << std::endl;
     break;
-  case CUDA:
-#ifdef DEPTH_REG_CUDA
-    std::cout << OUT_NAME("New") "Using CUDA registration method!" << std::endl;
-    return new DepthRegistrationCUDA();
-#else
-    std::cerr << OUT_NAME("New") "CUDA registration method not available!" << std::endl;
-    break;
-#endif
+//   case CUDA:
+// #ifdef DEPTH_REG_CUDA
+//     std::cout << OUT_NAME("New") "Using CUDA registration method!" << std::endl;
+//     return new DepthRegistrationCUDA();
+// #else
+//     std::cerr << OUT_NAME("New") "CUDA registration method not available!" << std::endl;
+//     break;
+// #endif
   case CPU:
 #ifdef DEPTH_REG_CPU
     std::cout << OUT_NAME("New") "Using CPU registration method!" << std::endl;

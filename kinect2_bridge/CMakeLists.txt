@@ -21,7 +21,7 @@ ENDIF()
 
 find_package(freenect2 REQUIRED)
 
-find_package(catkin REQUIRED COMPONENTS roscpp rostime std_msgs sensor_msgs nodelet cv_bridge compressed_depth_image_transport kinect2_registration)
+find_package(catkin REQUIRED COMPONENTS roscpp rostime std_msgs sensor_msgs nodelet cv_bridge compressed_depth_image_transport)
 
 ## System dependencies are found with CMake's conventions
 find_package(OpenCV REQUIRED)
@@ -47,7 +47,7 @@ endif()
 catkin_package(
   INCLUDE_DIRS include
 #  LIBRARIES kinect2_bridge
-  CATKIN_DEPENDS kinect2_registration
+#  CATKIN_DEPENDS kinect2_registration
 #  DEPENDS system_lib
 )
 
@@ -67,8 +67,8 @@ add_custom_target(additional_files_${PROJECT_NAME}
 include_directories(include
   ${catkin_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIR}
-  ${freenect2_INCLUDE_DIRS}
-  ${kinect2_registration_INCLUDE_DIRS}
+  ${freenect2_INCLUDE_DIRS}  
+#  ${kinect2_registration_INCLUDE_DIRS}
 )
 
 if(DEPTH_REG_OPENCL)
@@ -81,18 +81,20 @@ add_definitions(-DK2_CALIB_PATH="${PROJECT_SOURCE_DIR}/data/")
 
 add_library(kinect2_bridge_nodelet SHARED src/kinect2_bridge.cpp)
 target_link_libraries(kinect2_bridge_nodelet
+  ${freenect2_LIBRARY}
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
-  ${freenect2_LIBRARY}
-  ${kinect2_registration_LIBRARY}
+#  ${kinect2_registration_LIBRARY}
+  turbojpeg
 )
 
 add_executable(kinect2_bridge src/kinect2_bridge.cpp)
 target_link_libraries(kinect2_bridge
+  ${freenect2_LIBRARY}
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
-  ${freenect2_LIBRARY}
-  ${kinect2_registration_LIBRARY}
+#  ${kinect2_registration_LIBRARY}
+  turbojpeg
 )
 
 #############

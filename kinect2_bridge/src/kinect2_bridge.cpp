@@ -26,8 +26,6 @@
 #include <chrono>
 #include <sys/stat.h>
 
-#include <opencv2/opencv.hpp>
-
 #include <ros/ros.h>
 #include <nodelet/nodelet.h>
 #include <std_msgs/Header.h>
@@ -48,7 +46,11 @@
 #include <libfreenect2/registration.h>
 
 #include <kinect2_bridge/kinect2_definitions.h>
-#include <kinect2_registration/kinect2_registration.h>
+// #include <kinect2_registration/kinect2_registration.h>
+
+#include <opencv2/opencv.hpp>
+
+#include <turbojpeg.h>
 
 class Kinect2Bridge
 {
@@ -65,7 +67,7 @@ private:
   std::vector<std::thread> threads;
   std::mutex lockIrDepth, lockColor;
   std::mutex lockSync, lockPub, lockTime, lockStatus;
-  std::mutex lockRegLowRes, lockRegHighRes;
+  // std::mutex lockRegLowRes, lockRegHighRes;
 
   bool publishTF;
   std::thread tfPublisher, mainThread;
@@ -81,7 +83,7 @@ private:
 
   ros::NodeHandle nh, priv_nh;
 
-  DepthRegistration *depthRegLowRes, *depthRegHighRes;
+  // DepthRegistration *depthRegLowRes, *depthRegHighRes;
 
   size_t frameColor, frameIrDepth, pubFrameColor, pubFrameIrDepth;
   ros::Time lastColor, lastDepth;
@@ -126,6 +128,7 @@ private:
   ros::Publisher infoHDPub, infoQHDPub, infoIRPub;
   sensor_msgs::CameraInfo infoHD, infoQHD, infoIR;
   std::vector<Status> status;
+  tjhandle _jpegCompressor = tjInitCompress();
 
 public:
   Kinect2Bridge(const ros::NodeHandle &nh = ros::NodeHandle(), const ros::NodeHandle &priv_nh = ros::NodeHandle("~"))
@@ -140,6 +143,10 @@ public:
     status.resize(COUNT, UNSUBCRIBED);
   }
 
+  ~Kinect2Bridge()
+  {
+    tjDestroy(_jpegCompressor);
+  }
   void start()
   {
     if(!initialize())
@@ -281,7 +288,7 @@ private:
       initCalibration(calib_path, sensor);
     }
 
-    ret = ret && initRegistration(reg_method, reg_dev, maxDepth);
+    // ret = ret && initRegistration(reg_method, reg_dev, maxDepth);
 
     if(ret)
     {
@@ -294,42 +301,42 @@ private:
 
   bool initRegistration(const std::string &method, const int32_t device, const double maxDepth)
   {
-    DepthRegistration::Method reg;
+//     DepthRegistration::Method reg;
 
-    if(method == "default")
-    {
-      reg = DepthRegistration::DEFAULT;
-    }
-    else if(method == "cpu")
-    {
-#ifdef DEPTH_REG_CPU
-      reg = DepthRegistration::CPU;
-#else
-      std::cerr << "CPU registration is not available!" << std::endl;
-      return -1;
-#endif
-    }
-    else if(method == "opencl")
-    {
-#ifdef DEPTH_REG_OPENCL
-      reg = DepthRegistration::OPENCL;
-#else
-      std::cerr << "OpenCL registration is not available!" << std::endl;
-      return -1;
-#endif
-    }
-    else
-    {
-      std::cerr << "Unknown registration method: " << method << std::endl;
-      return false;
-    }
+//     if(method == "default")
+//     {
+//       reg = DepthRegistration::DEFAULT;
+//     }
+//     else if(method == "cpu")
+//     {
+// #ifdef DEPTH_REG_CPU
+//       reg = DepthRegistration::CPU;
+// #else
+//       std::cerr << "CPU registration is not available!" << std::endl;
+//       return -1;
+// #endif
+//     }
+//     else if(method == "opencl")
+//     {
+// #ifdef DEPTH_REG_OPENCL
+//       reg = DepthRegistration::OPENCL;
+// #else
+//       std::cerr << "OpenCL registration is not available!" << std::endl;
+//       return -1;
+// #endif
+//     }
+//     else
+//     {
+//       std::cerr << "Unknown registration method: " << method << std::endl;
+//       return false;
+//     }
 
-    depthRegLowRes = DepthRegistration::New(reg);
-    depthRegHighRes = DepthRegistration::New(reg);
+//     depthRegLowRes = DepthRegistration::New(reg);
+//     depthRegHighRes = DepthRegistration::New(reg);
 
     bool ret = true;
-    ret = ret && depthRegLowRes->init(cameraMatrixLowRes, sizeLowRes, cameraMatrixIr, sizeIr, distortionIr, rotation, translation, 0.5f, maxDepth, device);
-    ret = ret && depthRegHighRes->init(cameraMatrixColor, sizeColor, cameraMatrixIr, sizeIr, distortionIr, rotation, translation, 0.5f, maxDepth, device);
+//     ret = ret && depthRegLowRes->init(cameraMatrixLowRes, sizeLowRes, cameraMatrixIr, sizeIr, distortionIr, rotation, translation, 0.5f, maxDepth, device);
+//     ret = ret && depthRegHighRes->init(cameraMatrixColor, sizeColor, cameraMatrixIr, sizeIr, distortionIr, rotation, translation, 0.5f, maxDepth, device);
 
     registration = new libfreenect2::Registration(irParams, colorParams);
 
@@ -418,8 +425,8 @@ private:
 
     topics[DEPTH_SD] = K2_TOPIC_SD K2_TOPIC_IMAGE_DEPTH;
     topics[DEPTH_SD_RECT] = K2_TOPIC_SD K2_TOPIC_IMAGE_DEPTH K2_TOPIC_IMAGE_RECT;
-    topics[DEPTH_HD] = K2_TOPIC_HD K2_TOPIC_IMAGE_DEPTH K2_TOPIC_IMAGE_RECT;
-    topics[DEPTH_QHD] = K2_TOPIC_QHD K2_TOPIC_IMAGE_DEPTH K2_TOPIC_IMAGE_RECT;
+    topics[DEPTH_HD] = K2_TOPIC_HD K2_TOPIC_IMAGE_DEPTH;
+    topics[DEPTH_QHD] = K2_TOPIC_QHD K2_TOPIC_IMAGE_DEPTH;
 
     topics[COLOR_SD_RECT] = K2_TOPIC_SD K2_TOPIC_IMAGE_COLOR K2_TOPIC_IMAGE_RECT;
 
@@ -902,7 +909,16 @@ private:
 
     colorFrame = std::shared_ptr<libfreenect2::Frame>(frames[libfreenect2::Frame::Color]);
 
-    color = cv::Mat(colorFrame->height, colorFrame->width, CV_8UC3, colorFrame->data);
+#ifndef LIBFREENECT2_WITH_TEGRA_JPEG_SUPPORT
+    color = cv::Mat(colorFrame->height, colorFrame->width, CV_8UC4, colorFrame->data);
+#else
+    unsigned char **pprgba = reinterpret_cast<unsigned char **>(colorFrame->data);
+    cv::Mat rgba(1080, 1920, CV_8UC4, pprgba[0]);
+    color = cv::Mat (1080, 1920, CV_8UC3);
+    cv::cvtColor(rgba, color, cv::COLOR_RGBA2BGR);
+    //cv::imshow("rgb", color);
+    //cv::waitKey(1);
+#endif
 
     frame = frameColor++;
     lockColor.unlock();
@@ -915,6 +931,7 @@ private:
     lockTime.lock();
     elapsedTimeColor += elapsed;
     lockTime.unlock();
+
   }
 
   bool receiveFrames(libfreenect2::SyncMultiFrameListener *listener, libfreenect2::FrameMap &frames)
@@ -976,8 +993,9 @@ private:
         std::shared_ptr<libfreenect2::Frame> tmpColor, tmpDepth;
         tmpColor = colorFrame;
         tmpDepth = depthFrame;
-        cv::Mat tmp = cv::Mat::zeros(sizeIr, CV_8UC3);
-        registration->apply(tmpColor.get(), tmpDepth.get(), tmp.data);
+        libfreenect2::Frame undistorted(512, 424, 4), registered(512, 424, 3);
+        registration->apply(tmpColor.get(), tmpDepth.get(), &undistorted, &registered);
+        cv::Mat tmp(registered.height, registered.width, CV_8UC3, registered.data);
         cv::flip(tmp, images[COLOR_SD_RECT], 1);
       }
     }
@@ -994,11 +1012,11 @@ private:
     }
 
     // DEPTH
-    cv::Mat depthShifted;
+    cv::Mat depthShifted, tmp;
     if(status[DEPTH_SD])
     {
-      depth.convertTo(images[DEPTH_SD], CV_16U, 1);
-      cv::flip(images[DEPTH_SD], images[DEPTH_SD], 1);
+      depth.convertTo(tmp, CV_16U, 1);
+      cv::flip(tmp, images[DEPTH_SD], 1);
     }
     if(status[DEPTH_SD_RECT] || status[DEPTH_QHD] || status[DEPTH_HD])
     {
@@ -1007,23 +1025,27 @@ private:
     }
     if(status[DEPTH_SD_RECT])
     {
+      std::cout << " cv::remap(depthShifted, images[DEPTH_SD_RECT], map1Ir, map2Ir, cv::INTER_NEAREST);" << std::endl;
       cv::remap(depthShifted, images[DEPTH_SD_RECT], map1Ir, map2Ir, cv::INTER_NEAREST);
+      std::cout << " DONE" << std::endl;
     }
     if(status[DEPTH_QHD])
     {
-      lockRegLowRes.lock();
-      depthRegLowRes->registerDepth(depthShifted, images[DEPTH_QHD]);
-      // depthShifted.copyTo(images[DEPTH_QHD]);
-      std::cout << " Register Depth Low Res called!" << std::endl;
-      lockRegLowRes.unlock();
+      // lockRegLowRes.lock();
+      // depthRegLowRes->registerDepth(depthShifted, images[DEPTH_QHD]);
+      // // depthShifted.copyTo(images[DEPTH_QHD]);
+      // std::cout << " Depth Low Res called!" << std::endl;
+      // lockRegLowRes.unlock();
+      depthShifted.copyTo(images[DEPTH_QHD]);
     }
     if(status[DEPTH_HD])
     {
-      lockRegHighRes.lock();
-      depthRegHighRes->registerDepth(depthShifted, images[DEPTH_HD]);
+      // lockRegHighRes.lock();
+      // depthRegHighRes->registerDepth(depthShifted, images[DEPTH_HD]);
       // depthShifted.copyTo(images[DEPTH_HD]);
-      std::cout << " Register Depth High Res called!" << std::endl;
-      lockRegHighRes.unlock();
+      // std::cout << " Depth High Res called!" << std::endl;
+      // lockRegHighRes.unlock();
+      depthShifted.copyTo(images[DEPTH_QHD]);
     }
   }
 
@@ -1221,6 +1243,11 @@ private:
   {
     msgImage.header = header;
 
+    //std::cout << "createCompressed called for " << type << std::endl;
+
+    const int JPEG_QUALITY = 90;
+    long unsigned int _jpegSize = 0;
+    unsigned char* _compressedImage = NULL;
     switch(type)
     {
     case IR_SD:
@@ -1238,7 +1265,10 @@ private:
     case COLOR_QHD:
     case COLOR_QHD_RECT:
       msgImage.format = sensor_msgs::image_encodings::BGR8 + "; jpeg compressed bgr8";
-      cv::imencode(".jpg", image, msgImage.data, compressionParams);
+      tjCompress2(_jpegCompressor, image.data, image.cols, 0, image.rows, TJPF_BGR,
+          &_compressedImage, &_jpegSize, TJSAMP_444, JPEG_QUALITY, TJFLAG_FASTDCT);
+      msgImage.data.assign(_compressedImage,_compressedImage+_jpegSize);
+      //cv::imencode(".jpg", image, msgImage.data, compressionParams);
       break;
     case MONO_HD:
     case MONO_HD_RECT:
