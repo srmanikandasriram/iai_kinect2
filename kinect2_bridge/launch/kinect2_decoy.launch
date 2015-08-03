@@ -1,0 +1,11 @@
+<launch>
+
+  <node pkg="tf" type="static_transform_publisher" name="kinect2_decoy" args="0.0 0.0 0.0 0.0 0.0 0.0 1.0 kinect2_link kinect2_rgb_optical_frame 10">
+  </node>
+  <node pkg="tf" type="static_transform_publisher" name="kinect2_decoy2" args="0.052 0.0 0.0 0.0 0.0 0.0 1.0 kinect2_rgb_optical_frame kinect2_ir_optical_frame 10">
+  </node>
+  <node pkg="kinect2_bridge" type="depth_rect" name="depth_rect_node">
+  	<remap from="/kinect2/qhd/image_depth" to="/kinect2/data_throttled_image_depth_relay" />
+  </node>
+
+</launch>

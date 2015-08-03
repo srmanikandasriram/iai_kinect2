@@ -147,11 +147,13 @@ public:
   {
     tjDestroy(_jpegCompressor);
   }
-  void start()
+
+  bool start()
   {
     if(!initialize())
     {
-      return;
+      std::cerr << "Initialization failed!" << std::endl;
+      return false;
     }
     running = true;
 
@@ -166,6 +168,7 @@ public:
     }
 
     mainThread = std::thread(&Kinect2Bridge::main, this);
+    return true;
   }
 
   void stop()
@@ -189,6 +192,9 @@ public:
     delete listenerIrDepth;
     delete listenerColor;
     delete registration;
+
+    delete depthRegLowRes;
+    delete depthRegHighRes;
 
     for(size_t i = 0; i < COUNT; ++i)
     {
@@ -279,68 +285,79 @@ private:
 
     initCompression(jpeg_quality, png_level, use_png);
 
-    bool ret = true;
-    ret = ret && initPipeline(depth_method, depth_dev, bilateral_filter, edge_aware_filter, minDepth, maxDepth);
-    ret = ret && initDevice(sensor);
-
-    if(ret)
+    if(!initPipeline(depth_method, depth_dev, bilateral_filter, edge_aware_filter, minDepth, maxDepth))
     {
-      initCalibration(calib_path, sensor);
+      return false;
+    }
+
+    if(!initDevice(sensor))
+    {
+      return false;
     }
 
     // ret = ret && initRegistration(reg_method, reg_dev, maxDepth);
+    initCalibration(calib_path, sensor);
 
-    if(ret)
+    if(!initRegistration(reg_method, reg_dev, maxDepth))
     {
-      createCameraInfo();
+      device->close();
+      delete listenerIrDepth;
+      delete listenerColor;
+      return false;
     }
+
+    createCameraInfo();
     initTopics(queueSize, base_name);
 
-    return ret;
+    return true;
   }
 
   bool initRegistration(const std::string &method, const int32_t device, const double maxDepth)
   {
-//     DepthRegistration::Method reg;
+//    DepthRegistration::Method reg;
+//
+//    if(method == "default")
+//    {
+//      reg = DepthRegistration::DEFAULT;
+//    }
+//    else if(method == "cpu")
+//    {
+//#ifdef DEPTH_REG_CPU
+//      reg = DepthRegistration::CPU;
+//#else
+//      std::cerr << "CPU registration is not available!" << std::endl;
+//      return false;
+//#endif
+//    }
+//    else if(method == "opencl")
+//    {
+//#ifdef DEPTH_REG_OPENCL
+//      reg = DepthRegistration::OPENCL;
+//#else
+//      std::cerr << "OpenCL registration is not available!" << std::endl;
+//      return false;
+//#endif
+//    }
+//    else
+//    {
+//      std::cerr << "Unknown registration method: " << method << std::endl;
+//      return false;
+//    }
 
-//     if(method == "default")
-//     {
-//       reg = DepthRegistration::DEFAULT;
-//     }
-//     else if(method == "cpu")
-//     {
-// #ifdef DEPTH_REG_CPU
-//       reg = DepthRegistration::CPU;
-// #else
-//       std::cerr << "CPU registration is not available!" << std::endl;
-//       return -1;
-// #endif
-//     }
-//     else if(method == "opencl")
-//     {
-// #ifdef DEPTH_REG_OPENCL
-//       reg = DepthRegistration::OPENCL;
-// #else
-//       std::cerr << "OpenCL registration is not available!" << std::endl;
-//       return -1;
-// #endif
-//     }
-//     else
-//     {
-//       std::cerr << "Unknown registration method: " << method << std::endl;
-//       return false;
-//     }
+//    depthRegLowRes = DepthRegistration::New(reg);
+//    depthRegHighRes = DepthRegistration::New(reg);
 
-//     depthRegLowRes = DepthRegistration::New(reg);
-//     depthRegHighRes = DepthRegistration::New(reg);
+//    if(!depthRegLowRes->init(cameraMatrixLowRes, sizeLowRes, cameraMatrixIr, sizeIr, distortionIr, rotation, translation, 0.5f, maxDepth, device) ||
+//       !depthRegHighRes->init(cameraMatrixColor, sizeColor, cameraMatrixIr, sizeIr, distortionIr, rotation, translation, 0.5f, maxDepth, device))
+//    {
+//      delete depthRegLowRes;
+//      delete depthRegHighRes;
+//      return false;
+//    }
 
-    bool ret = true;
-//     ret = ret && depthRegLowRes->init(cameraMatrixLowRes, sizeLowRes, cameraMatrixIr, sizeIr, distortionIr, rotation, translation, 0.5f, maxDepth, device);
-//     ret = ret && depthRegHighRes->init(cameraMatrixColor, sizeColor, cameraMatrixIr, sizeIr, distortionIr, rotation, translation, 0.5f, maxDepth, device);
+//    registration = new libfreenect2::Registration(irParams, colorParams);
 
-    registration = new libfreenect2::Registration(irParams, colorParams);
-
-    return ret;
+    return true;
   }
 
   bool initPipeline(const std::string &method, const int32_t device, const bool bilateral_filter, const bool edge_aware_filter, const double minDepth, const double maxDepth)
@@ -348,7 +365,7 @@ private:
     if(method == "default")
     {
 #ifdef LIBFREENECT2_WITH_CUDA_SUPPORT
-      packetPipeline = new libfreenect2::CudaPacketPipeline(device);      
+      packetPipeline = new libfreenect2::CudaPacketPipeline(device);
 #elif defined(LIBFREENECT2_WITH_OPENCL_SUPPORT)
       packetPipeline = new libfreenect2::OpenCLPacketPipeline(device);
 #elif defined(LIBFREENECT2_WITH_OPENGL_SUPPORT)
@@ -462,6 +479,7 @@ private:
     if(numOfDevs <= 0)
     {
       std::cerr << "Error: no Kinect2 devices found!" << std::endl;
+      delete packetPipeline;
       return false;
     }
 
@@ -481,6 +499,7 @@ private:
     if(!deviceFound)
     {
       std::cerr << "Error: Device with serial '" << sensor << "' not found!" << std::endl;
+      delete packetPipeline;
       return false;
     }
 
@@ -489,7 +508,7 @@ private:
     if(device == 0)
     {
       std::cout << "no device connected or failure opening the default one!" << std::endl;
-      return -1;
+      return false;
     }
 
     listenerColor = new libfreenect2::SyncMultiFrameListener(libfreenect2::Frame::Color);
@@ -991,6 +1010,8 @@ private:
       else
       {
         std::shared_ptr<libfreenect2::Frame> tmpColor, tmpDepth;
+        cv::Mat tmp;
+        libfreenect2::Frame undistorted(sizeIr.width, sizeIr.height, 4), registered(sizeIr.width, sizeIr.height, 4);
         tmpColor = colorFrame;
         tmpDepth = depthFrame;
         libfreenect2::Frame undistorted(512, 424, 4), registered(512, 424, 3);
@@ -1055,7 +1076,9 @@ private:
     if(status[COLOR_HD] || status[COLOR_HD_RECT] || status[COLOR_QHD] || status[COLOR_QHD_RECT] ||
        status[MONO_HD] || status[MONO_HD_RECT] || status[MONO_QHD] || status[MONO_QHD_RECT])
     {
-      cv::flip(color, images[COLOR_HD], 1);
+      cv::Mat tmp;
+      cv::flip(color, tmp, 1);
+      cv::cvtColor(tmp, images[COLOR_HD], CV_BGRA2BGR);
     }
     if(status[COLOR_HD_RECT] || status[MONO_HD_RECT])
     {
@@ -1426,11 +1449,12 @@ int main(int argc, char **argv)
   }
 
   Kinect2Bridge kinect2;
-  kinect2.start();
+  if(kinect2.start())
+  {
+    ros::spin();
 
-  ros::spin();
-
-  kinect2.stop();
+    kinect2.stop();
+  }
 
   ros::shutdown();
   return 0;
